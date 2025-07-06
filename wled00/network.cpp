@@ -51,7 +51,7 @@ const ethernet_settings ethernetBoards[] = {
     -1,			              // eth_power,
     16,			              // eth_mdc,
     17,			              // eth_mdio,
-    ETH_PHY_LAN8720,      // eth_type,
+    ETH_PHY_RTL8201,      // eth_type,
     ETH_CLOCK_GPIO0_IN	  // eth_clk_mode
   },
 
@@ -168,25 +168,49 @@ int getSignalQuality(int rssi)
     }
     return quality;
 }
-
+#if ESP_IDF_VERSION_MAJOR >= 4
+  #define SYSTEM_EVENT_ETH_CONNECTED ARDUINO_EVENT_ETH_CONNECTED
+  #define SYSTEM_EVENT_ETH_DISCONNECTED ARDUINO_EVENT_ETH_DISCONNECTED
+  #define SYSTEM_EVENT_ETH_START ARDUINO_EVENT_ETH_START
+  #define SYSTEM_EVENT_ETH_GOT_IP ARDUINO_EVENT_ETH_GOT_IP
+#endif
 
 //handle Ethernet connection event
 void WiFiEvent(WiFiEvent_t event)
 {
+  DEBUG_PRINTF_P(PSTR("New network event: %d\n"), (int)event);
   switch (event) {
-#if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_ETHERNET)
+#if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_ETHERNET)  
     case SYSTEM_EVENT_ETH_START:
       DEBUG_PRINTLN(F("ETH Started"));
+      break;
+    case 	ARDUINO_EVENT_WIFI_STA_START:
+      DEBUG_PRINTLN(F("ARDUINO_EVENT_WIFI_STA_START"));
+      break;
+    case 	ARDUINO_EVENT_WIFI_STA_STOP:
+      DEBUG_PRINTLN(F("ARDUINO_EVENT_WIFI_STA_STOP"));
+      break;
+    case SYSTEM_EVENT_ETH_GOT_IP:
+        DEBUG_PRINTLN(F("SYSTEM_EVENT_ETH_GOT_IP"));
+        if (Network.isEthernet()) {
+              if (!apActive) {
+          DEBUG_PRINTLN(F("WiFi Connected *and* ETH Connected. Disabling WIFi"));
+          WiFi.disconnect(true);
+        } else {
+          DEBUG_PRINTLN(F("WiFi Connected *and* ETH Connected. Leaving AP WiFi active"));
+        }
+      } else {
+        DEBUG_PRINTLN(F("WiFi Connected. No ETH"));
+      }
       break;
     case SYSTEM_EVENT_ETH_CONNECTED:
       {
       DEBUG_PRINTLN(F("ETH Connected"));
-      if (!apActive) {
-        WiFi.disconnect(true);
-      }
       if (multiWiFi[0].staticIP != (uint32_t)0x00000000 && multiWiFi[0].staticGW != (uint32_t)0x00000000) {
+        DEBUG_PRINTLN(F("ETH Connected with static IP"));
         ETH.config(multiWiFi[0].staticIP, multiWiFi[0].staticGW, multiWiFi[0].staticSN, dnsAddress);
       } else {
+        DEBUG_PRINTLN(F("ETH Connected without IP"));
         ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
       }
       // convert the "serverDescription" into a valid DNS hostname (alphanumeric)

@@ -245,6 +245,9 @@ void WLED::loop()
     #ifndef WLED_DISABLE_ESPNOW
     DEBUG_PRINTF_P(PSTR("ESP-NOW state: %u\n"), statusESPNow);
     #endif
+    #ifndef WLED_USE_ETHERNET
+    DEBUG_PRINT(Network.localIP());
+    #endif
 
     if (WiFi.status() != lastWifiState) {
       wifiStateChangedTime = millis();
@@ -611,7 +614,7 @@ bool WLED::initEthernet()
   static bool successfullyConfiguredEthernet = false;
 
   if (successfullyConfiguredEthernet) {
-    // DEBUG_PRINTLN(F("initE: ETH already successfully configured, ignoring"));
+    DEBUG_PRINTLN(F("initE: ETH already successfully configured, ignoring"));
     return false;
   }
   if (ethernetType == WLED_ETH_NONE) {
@@ -896,7 +899,7 @@ void WLED::handleConnection()
 
   // ignore connection handling if WiFi is configured and scan still running
   // or within first 2s if WiFi is not configured or AP is always active
-  if ((wifiConfigured && multiWiFi.size() > 1 && WiFi.scanComplete() < 0) || (now < 2000 && (!wifiConfigured || apBehavior == AP_BEHAVIOR_ALWAYS)))
+  if ((wifiConfigured && multiWiFi.size() > 1 && WiFi.scanComplete() < 0) || (now < 5000 && (!wifiConfigured || apBehavior == AP_BEHAVIOR_ALWAYS)))
     return;
 
   if (lastReconnectAttempt == 0 || forceReconnect) {
@@ -971,10 +974,19 @@ void WLED::handleConnection()
         DEBUG_PRINTF_P(PSTR("Temporary AP disabled (@ %lus).\n"), nowS);
       }
     }
-  } else if (!interfacesInited) { //newly connected
+  } else if (!interfacesInited) {
     DEBUG_PRINTLN();
-    DEBUG_PRINT(F("Connected! IP address: "));
-    DEBUG_PRINTLN(Network.localIP());
+    DEBUG_PRINTLN("");
+    DEBUG_PRINT(F("Connected! IP address: http://"));
+    DEBUG_PRINT(Network.localIP());
+    if (Network.isEthernet()) {
+        #if ESP32
+     DEBUG_PRINTLN(" via Ethernet (disabling WiFi)");
+     WiFi.disconnect(true);
+     #endif
+    } else {
+     DEBUG_PRINTLN(" via WiFi");
+    }
     if (improvActive) {
       if (improvError == 3) sendImprovStateResponse(0x00, true);
       sendImprovStateResponse(0x04);
